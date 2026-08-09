@@ -1,0 +1,16 @@
+{
+  "name": "renta-eventos",
+  "version": "1.0.0",
+  "description": "Dashboard de eventos para renta de muebles: lee notas impresas con OCR gratis y arma una ficha por evento.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
