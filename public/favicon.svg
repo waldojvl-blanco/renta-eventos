@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Silla crossback</title>
+  <rect width="64" height="64" rx="14" fill="#111619"/>
+  <g fill="none" stroke="#59ACBB" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+    <!-- respaldo curvo -->
+    <path d="M19 12 Q32 6 45 12"/>
+    <!-- postes -->
+    <path d="M19 12 V36"/>
+    <path d="M45 12 V36"/>
+    <!-- la cruz -->
+    <path d="M20 15.5 L44 33"/>
+    <path d="M44 15.5 L20 33"/>
+    <!-- asiento -->
+    <path d="M14 37.5 H50"/>
+    <!-- patas -->
+    <path d="M19 39.5 L16 56"/>
+    <path d="M45 39.5 L48 56"/>
+  </g>
+</svg>
