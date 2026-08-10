@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: renta-eventos
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false # se captura manualmente en el panel de Render (es un secreto)
+      - key: NODE_VERSION
+        value: "20"

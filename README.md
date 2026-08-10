@@ -4,7 +4,12 @@ Subes la foto o el PDF de una nota **impresa**, la app la lee con **OCR gratis**
 (Tesseract, corre en el navegador — no gasta tokens ni servidor) y arma la ficha
 del evento: cliente, productos a entregar, fecha/hora, lugar, observaciones y montaje.
 
-Los eventos se guardan en `data/eventos.json` (en el servidor).
+**Dónde se guardan los eventos:**
+
+- Si existe la variable `DATABASE_URL` → en **Postgres (Neon)**. Permanente.
+- Si no existe → en `data/eventos.json`. Práctico para trabajar en tu Mac.
+
+No hay que cambiar nada de código para pasar de uno a otro: solo la variable.
 
 ---
 
@@ -28,24 +33,53 @@ Recuerda: si reemplazas archivos de `public/`, reinicia con **Ctrl+C** y `npm st
 
 ---
 
-## Subirla a Render (para verla en el cel/iPad)
+## Publicarla: Neon (base de datos) + Render (servidor)
 
-1. Sube esta carpeta a un repo de GitHub.
-2. En Render: **New → Web Service**, conecta el repo.
+Repo: <https://github.com/waldojvl-blanco/renta-eventos>
+
+### Paso 1 · Crear la base en Neon
+
+1. Entra a <https://console.neon.tech> → **New Project**.
+2. Nómbralo `renta-eventos`. Región: la más cercana (US East suele servir).
+3. Al terminar te muestra la **connection string**. Se ve así:
+   ```
+   postgresql://usuario:CONTRASEÑA@ep-algo-123.us-east-2.aws.neon.tech/neondb?sslmode=require
+   ```
+4. Cópiala. **Es una contraseña: no la pegues en el código ni en el repo.**
+
+No hace falta crear tablas a mano — la app crea la tabla `eventos` sola al arrancar.
+
+### Paso 2 · Subir los eventos que ya tienes
+
+En la terminal, dentro de esta carpeta (pega tu connection string entre comillas):
+
+```
+DATABASE_URL="postgresql://...pega-la-tuya..." npm run migrar
+```
+
+Te dice cuántos eventos subió. Puedes correrlo varias veces sin duplicar nada.
+
+### Paso 3 · Crear el servicio en Render
+
+1. Entra a <https://dashboard.render.com> → **New → Web Service**.
+2. Conecta el repo `waldojvl-blanco/renta-eventos`.
+3. Configuración:
+   - Runtime: **Node**
    - Build command: `npm install`
    - Start command: `npm start`
-   - Render asigna el puerto solo (la app ya lee `process.env.PORT`).
-3. Listo, te da una URL https que abres desde el cel.
+   - Plan: **Free**
+4. En **Environment Variables** agrega:
+   - Key: `DATABASE_URL`
+   - Value: tu connection string de Neon
+5. **Create Web Service**. Render te da una URL https para abrir desde el cel.
 
-### Importante sobre los datos en Render (plan gratis)
-En el plan gratis el disco es **temporal**: si Render reinicia o vuelves a
-desplegar, `data/eventos.json` se puede borrar. Dos opciones:
+Ya no necesitas disco de paga: los datos viven en Neon.
 
-- **Para uso permanente en el cel:** agrega un *Disk* en Render (de paga, ~1 USD/mes),
-  móntalo por ejemplo en `/var/data` y arranca con la variable
-  `DATA_DIR=/var/data`. Así los eventos no se pierden.
-- **Si no quieres pagar:** corre la app en tu Mac (ahí los datos son permanentes)
-  y usa Render solo para consultas rápidas.
+### Cómo saber que quedó bien
 
-Si más adelante quieres, se puede cambiar el guardado a una base de datos gratis
-para que persista en el cel sin disco de paga.
+- Abre `https://tu-app.onrender.com/health` → debe responder `{"ok":true}`.
+- En los logs de Render debe decir `Datos en -> Postgres (Neon)`.
+  Si dice una ruta de archivo, es que falta la variable `DATABASE_URL`.
+
+> El plan gratis de Render duerme el servicio tras ~15 min sin uso.
+> La primera carga después de dormir tarda unos 30–50 segundos. Los datos no se pierden.
