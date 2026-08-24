@@ -348,15 +348,23 @@ function parseNota(text){
   const field = re => { const m = text.match(re); return m ? (m[1]||'').trim() : ''; };
   const grab  = re => { const m = joined.match(re); return m ? money(m[1]) : ''; };
 
-  const cliente = field(/CLIENTE:?\s*(.+)/i);
-  const telefono = (field(/TEL[EÉ]FONO:?\s*(\d[\d\s]{6,})/i) || field(/(?:cel|celular|whats?app?):?\s*(\d[\d\s]{6,})/i) || '').replace(/\D/g,'').slice(0,10);
+  let clienteRaw = field(/CLIENTE:?\s*(.+)/i);
+  // formato nuevo: "Cliente: Scarlet Robles · 3317244982" (tel pegado al nombre, sin línea "TELÉFONO:")
+  const telInline = clienteRaw.match(/(\d[\d\s]{6,}\d)\s*$/);
+  const telefono = (field(/TEL[EÉ]FONO:?\s*(\d[\d\s]{6,})/i) || field(/(?:cel|celular|whats?app?):?\s*(\d[\d\s]{6,})/i) || (telInline ? telInline[1] : '') || '').replace(/\D/g,'').slice(0,10);
+  const cliente = clienteRaw.replace(/[·•,\-]?\s*\d[\d\s]{6,}\d\s*$/,'').trim();
   const lugar = field(/(?:DIRECCI[OÓ]N|DOMICILIO|LUGAR|SAL[OÓ]N):?\s*(.+)/i);
   const fecha = normalizeDate(
       field(/FECHA\s+DE?L?\s+ENTREGA:?\s*(.+)/i) ||
+      field(/\bENTREGA:?\s*(.+)/i) ||                 // formato nuevo: "Entrega: 28/08/2026 ..."
       field(/FECHA(?:\s*DEL?\s*EVENTO)?:?\s*(.+)/i) || joined);
-  const hora = (field(/HORA\s+DE\s+ENTREGA:?\s*([\d:]{3,8})/i) || field(/HORA:?\s*([\d:\.apm ]{3,8})/i) || '')
-      .replace(/:00\s*$/,'').trim();
-  const recoleccion = normalizeDate(field(/FECHA\s+DE\s+RECOLECCI[OÓ]N:?\s*(.+)/i));
+  const hora = (field(/HORA\s+DE\s+ENTREGA:?\s*([\d:]{3,8})/i) ||
+      field(/HORA:?\s*([\d:\.apm ]{3,8})/i) ||
+      field(/ENTREGA:?[^\n]*?a\s*las\s*([\d:]{3,8})/i) ||  // formato nuevo: "Entrega: ... a las 15:00:00"
+      '').replace(/:00\s*$/,'').trim();
+  const recoleccion = normalizeDate(
+      field(/FECHA\s+DE\s+RECOLECCI[OÓ]N:?\s*(.+)/i) ||
+      field(/\bRECOLECCI[OÓ]N:?\s*(.+)/i));            // formato nuevo: "Recolección: 29/08/2026"
 
   const total    = grab(/SUBTOTAL:?\s*\$?\s*([\d.,]+)/i) || grab(/TOTAL:?\s*\$?\s*([\d.,]+)/i);
   const anticipo = grab(/ANTICIPO\s*\d*\s*%?\s*:?\s*\$?\s*([\d.,]+)/i) || grab(/(?:ABONO)\s*:?\s*\$?\s*([\d.,]+)/i);
@@ -364,26 +372,32 @@ function parseNota(text){
   const deposito = grab(/GARANT[IÍ]A\s*\d*\s*%?\s*:?\s*\$?\s*([\d.,]+)/i);
 
   // productos
-  const skipLabel = /^\s*(cliente|nombre|tel|correo|fecha|hora|lugar|direcci|domicilio|folio|producto|importe|de renta|cantidad|total|subtotal|anticipo|abono|restante|saldo|dep[oó]sito|garant|observaciones|incluye|renta de)/i;
+  const skipLabel = /^\s*(cliente|nombre|tel|correo|fecha|hora|lugar|direcci|domicilio|folio|producto|importe|de renta|cantidad|total|subtotal|anticipo|abono|restante|saldo|dep[oó]sito|garant|observaciones|incluye|renta de|a pagar)/i;
   const prodTabla  = /^(.+?)\s+\$\s*[\d,]+\.\d{2}\s+(\d+)\s+\$\s*[\d,]+\.\d{2}\s*$/;      // nombre  $precio  CANT  $total
+  const prodMult   = /^(.+?)\s+(\d+)\s*[×xX]\s*\$?\s*[\d,]+\.\d{2}\s*$/;                  // formato nuevo: nombre  CANT × $precio  (el importe va en el renglón siguiente)
   const prodInicio = /^(\d{1,3})\s*(?:pz|pzs|piezas?|x)?\s*[\-\.\)]?\s+(.{2,})/i;          // respaldo: CANT descripción
+  const soloImporte = /^\$\s*[\d,]+\.\d{2}\s*$/;                                          // renglón suelto con solo el importe (formato nuevo)
   const productos = [];
   for(const l0 of lines){
     const l = l0.trim();
+    if(soloImporte.test(l)) continue;
     let m = l.match(prodTabla);
     if(m){ const d=m[1].trim(); if(d && !skipLabel.test(d)) productos.push({cantidad:m[2], descripcion:d}); continue; }
-    if(!skipLabel.test(l)){
-      m = l.match(prodInicio);
-      if(m){ let d=m[2].replace(/\$?\s*[\d.,]+\s*$/,'').trim(); if(d.length>=2) productos.push({cantidad:m[1], descripcion:d}); }
-    }
+    if(skipLabel.test(l)) continue;
+    m = l.match(prodMult);
+    if(m){ const d=m[1].trim(); if(d.length>=2) productos.push({cantidad:m[2], descripcion:d}); continue; }
+    m = l.match(prodInicio);
+    if(m){ let d=m[2].replace(/\$?\s*[\d.,]+\s*$/,'').trim(); if(d.length>=2) productos.push({cantidad:m[1], descripcion:d}); }
   }
 
   // observaciones: bloque tras "OBSERVACIONES", quitando la columna financiera de la derecha
   const finTail = /(SUBTOTAL|ANTICIPO|RESTANTE|SALDO|DEP[OÓ]SITO|GARANT[IÍ]A|\d+\s*%|\$[\d.,]+).*/i;
+  const obsStop = /^(SUBTOTAL|TOTAL\s|ANTICIPO|RESTANTE|SALDO|DEP[OÓ]SITO|GARANT[IÍ]A|A\s*PAGAR|INCLUYE\s)/i;
   const obs = [];
   const oi = lines.findIndex(l => /OBSERVACIONES/i.test(l));
   if(oi >= 0){
     for(let i=oi+1; i<lines.length; i++){
+      if(obsStop.test(lines[i].trim())) break;         // llegamos al resumen de totales / texto legal: paramos aquí
       const left = lines[i].replace(finTail,'').trim();
       if(/[a-záéíóúñ]/i.test(left)) obs.push(left);
     }
