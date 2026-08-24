@@ -274,59 +274,86 @@ async function pdfPageToText(page){
   return rows.map(r => r.cells.sort((a,b)=>a.x-b.x).map(c=>c.s).join(' ').replace(/\s+/g,' ').trim()).join('\n');
 }
 
-async function handleFile(file){
+/* Lee y parsea una nota (foto o PDF). No toca el modal: solo procesa y regresa {parsed, thumb}.
+   La usan tanto "subir nota nueva" como el botón "Volver a leer la nota" al editar. */
+async function readNotaFile(file){
   const isPdf = file.type==='application/pdf';
-  modalBody.innerHTML = `<div class="loading"><div class="spinner"></div><div class="t">Leyendo la nota…</div><div class="h" id="ocrHint">Preparando</div><div class="bar"><i id="ocrBar"></i></div></div>`;
   const setProg = (p,msg)=>{ const b=document.getElementById('ocrBar'); if(b)b.style.width=Math.round(p*100)+'%'; if(msg){const h=document.getElementById('ocrHint'); if(h)h.textContent=msg;} };
-  try{
-    if(isPdf){
-      setProg(0.15,'Abriendo el PDF');
-      const ready = await (window.__pdfjsReady || Promise.resolve(false));
-      if(!ready || !window.pdfjsLib) throw new Error('pdfjs');
-      const buf = await file.arrayBuffer();
-      const pdf = await window.pdfjsLib.getDocument({data:buf}).promise;
-      const page = await pdf.getPage(1);               // SOLO hoja 1
-      setProg(0.45,'Leyendo el texto del PDF');
 
-      // miniatura para "ver nota"
-      let thumb=null;
-      try{
-        const vp=page.getViewport({scale:1.2});
-        const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
-        await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
-        thumb=c.toDataURL('image/jpeg',0.6);
-      }catch(e){}
+  if(isPdf){
+    setProg(0.15,'Abriendo el PDF');
+    const ready = await (window.__pdfjsReady || Promise.resolve(false));
+    if(!ready || !window.pdfjsLib) throw new Error('pdfjs');
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({data:buf}).promise;
+    const page = await pdf.getPage(1);               // SOLO hoja 1
+    setProg(0.45,'Leyendo el texto del PDF');
 
-      const text = await pdfPageToText(page);
-      if(text && text.replace(/\s/g,'').length > 20){   // PDF con texto real
-        const parsed = parseNota(text); parsed.__raw = text;
-        return showReview(parsed, thumb);
-      }
-      // PDF escaneado (sin capa de texto) -> OCR de la imagen
-      setProg(0.5,'PDF sin texto, usando OCR');
-      const vp2=page.getViewport({scale:2});
-      const c2=document.createElement('canvas'); c2.width=vp2.width; c2.height=vp2.height;
-      await page.render({canvasContext:c2.getContext('2d'), viewport:vp2}).promise;
-      const r = await Tesseract.recognize(c2,'spa',{logger:m=>{if(m.status==='recognizing text')setProg(0.5+m.progress*0.5,'Reconociendo el texto');}});
-      const parsed = parseNota(r.data.text||''); parsed.__raw = r.data.text||'';
-      return showReview(parsed, thumb);
+    // miniatura para "ver nota"
+    let thumb=null;
+    try{
+      const vp=page.getViewport({scale:1.2});
+      const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
+      await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
+      thumb=c.toDataURL('image/jpeg',0.6);
+    }catch(e){}
+
+    const text = await pdfPageToText(page);
+    if(text && text.replace(/\s/g,'').length > 20){   // PDF con texto real
+      const parsed = parseNota(text); parsed.__raw = text;
+      return {parsed, thumb};
     }
+    // PDF escaneado (sin capa de texto) -> OCR de la imagen
+    setProg(0.5,'PDF sin texto, usando OCR');
+    const vp2=page.getViewport({scale:2});
+    const c2=document.createElement('canvas'); c2.width=vp2.width; c2.height=vp2.height;
+    await page.render({canvasContext:c2.getContext('2d'), viewport:vp2}).promise;
+    const r = await Tesseract.recognize(c2,'spa',{logger:m=>{if(m.status==='recognizing text')setProg(0.5+m.progress*0.5,'Reconociendo el texto');}});
+    const parsed = parseNota(r.data.text||''); parsed.__raw = r.data.text||'';
+    return {parsed, thumb};
+  }
 
-    // ----- imagen (foto) -> OCR -----
-    const img = await fileToImage(file);
-    const ocrCanvas = imageToCanvas(img, 1800);
-    const thumb = imageToCanvas(img, 1000).toDataURL('image/jpeg',0.6);
-    setProg(0.2,'Reconociendo el texto');
-    const { data } = await Tesseract.recognize(ocrCanvas, 'spa', {
-      logger: m => { if(m.status==='recognizing text') setProg(0.2+m.progress*0.8,'Reconociendo el texto'); }
-    });
-    const parsed = parseNota(data.text || ''); parsed.__raw = data.text || '';
+  // ----- imagen (foto) -> OCR -----
+  const img = await fileToImage(file);
+  const ocrCanvas = imageToCanvas(img, 1800);
+  const thumb = imageToCanvas(img, 1000).toDataURL('image/jpeg',0.6);
+  setProg(0.2,'Reconociendo el texto');
+  const { data } = await Tesseract.recognize(ocrCanvas, 'spa', {
+    logger: m => { if(m.status==='recognizing text') setProg(0.2+m.progress*0.8,'Reconociendo el texto'); }
+  });
+  const parsed = parseNota(data.text || ''); parsed.__raw = data.text || '';
+  return {parsed, thumb};
+}
+
+async function handleFile(file){
+  modalBody.innerHTML = `<div class="loading"><div class="spinner"></div><div class="t">Leyendo la nota…</div><div class="h" id="ocrHint">Preparando</div><div class="bar"><i id="ocrBar"></i></div></div>`;
+  try{
+    const {parsed, thumb} = await readNotaFile(file);
     showReview(parsed, thumb);
   }catch(err){
     console.error(err);
     modalBody.innerHTML = `<div class="errbox">No pude leer la nota. Si es un PDF muy pesado o una foto borrosa, prueba con una foto más nítida y derecha. También puedes capturar a mano.</div>
       <button class="btn-primary" style="width:100%;justify-content:center" onclick="openNew()">Intentar otra vez</button>
       <button class="btn-ghost" style="width:100%;justify-content:center;margin-top:10px" onclick="showReview({productos:[]},null)">Capturar a mano</button>`;
+  }
+}
+
+/* Releer la nota de un evento que ya existe (botón "Volver a leer la nota" al editar).
+   Sustituye los campos del formulario por lo que se detecte en el archivo nuevo. */
+async function rereadNota(file){
+  const keepId = editingId;   // showReview no toca editingId, pero por claridad lo fijamos explícito después
+  modalBody.innerHTML = `<div class="loading"><div class="spinner"></div><div class="t">Releyendo la nota…</div><div class="h" id="ocrHint">Preparando</div><div class="bar"><i id="ocrBar"></i></div></div>`;
+  try{
+    const {parsed, thumb} = await readNotaFile(file);
+    editingId = keepId;
+    showReview(parsed, thumb || modalBody.dataset.imagen || null);
+    toast('Nota releída, revisa los datos antes de guardar');
+  }catch(err){
+    console.error(err);
+    toast('No pude releer la nota');
+    const e = EVENTS.find(x=>x.id===keepId);
+    editingId = keepId;
+    if(e) showReview({...e}, e.imagen||null);
   }
 }
 
@@ -415,6 +442,9 @@ function showReview(d, imagen){
   modalTitle.textContent = editingId ? 'Editar evento' : 'Revisa los datos';
   modalBody.innerHTML = `
     ${imagen?`<img class="preview-thumb" src="${imagen}" alt="nota">`:''}
+    ${editingId?`<button class="btn-ghost" id="rereadBtn" type="button" style="width:100%;justify-content:center;margin-bottom:12px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>
+      Volver a leer la nota</button><input type="file" id="rereadInput" accept="image/*,application/pdf" style="display:none">`:''}
     ${d.__raw?`<div class="raw-toggle" id="rawToggle">Ver texto que leí (OCR)</div><div class="raw-box" id="rawBox" style="display:none">${esc(d.__raw)}</div>`:''}
     <div class="field"><label>Cliente</label><input id="f-cliente" value="${esc(d.cliente)}"></div>
     <div class="row2">
@@ -453,6 +483,12 @@ function showReview(d, imagen){
   };
   const rt = document.getElementById('rawToggle');
   if(rt) rt.onclick = ()=>{ const b=document.getElementById('rawBox'); b.style.display = b.style.display==='none'?'block':'none'; };
+  const rrBtn = document.getElementById('rereadBtn');
+  if(rrBtn){
+    const rrInput = document.getElementById('rereadInput');
+    rrBtn.onclick = ()=> rrInput.click();
+    rrInput.onchange = ()=>{ if(rrInput.files[0]) rereadNota(rrInput.files[0]); };
+  }
   bindDel();
 }
 function prodRow(p){
@@ -482,7 +518,8 @@ async function saveFromForm(){
     cliente:v('f-cliente'), telefono:v('f-tel'), lugar:v('f-lugar'),
     fecha:v('f-fecha'), hora:v('f-hora'), recoleccion:v('f-recol'),
     productos, observaciones:v('f-obs'), montaje:v('f-montaje'),
-    total:v('f-total'), anticipo:v('f-ant'), saldo:v('f-saldo'), deposito:v('f-dep')
+    total:v('f-total'), anticipo:v('f-ant'), saldo:v('f-saldo'), deposito:v('f-dep'),
+    imagen: modalBody.dataset.imagen || null   // por si se releyó la nota con una foto/PDF nuevo
   };
   const btn = document.getElementById('saveBtn');
   btn.textContent = 'Guardando…';
@@ -494,7 +531,6 @@ async function saveFromForm(){
       toast('Evento actualizado');
     }else{
       base.estado = 'pendiente';
-      base.imagen = modalBody.dataset.imagen || null;
       const saved = await apiPost(base);
       EVENTS.push(saved);
       toast('Evento guardado');
