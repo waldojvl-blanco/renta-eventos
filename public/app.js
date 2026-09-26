@@ -286,30 +286,43 @@ async function readNotaFile(file){
     if(!ready || !window.pdfjsLib) throw new Error('pdfjs');
     const buf = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({data:buf}).promise;
-    const page = await pdf.getPage(1);               // SOLO hoja 1
-    setProg(0.45,'Leyendo el texto del PDF');
+    const numPages = pdf.numPages;
+    const page1 = await pdf.getPage(1);
+    setProg(0.3, numPages>1 ? `Leyendo ${numPages} hojas` : 'Leyendo el texto del PDF');
 
-    // miniatura para "ver nota"
+    // miniatura para "ver nota" (siempre de la hoja 1)
     let thumb=null;
     try{
-      const vp=page.getViewport({scale:1.2});
+      const vp=page1.getViewport({scale:1.2});
       const c=document.createElement('canvas'); c.width=vp.width; c.height=vp.height;
-      await page.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
+      await page1.render({canvasContext:c.getContext('2d'), viewport:vp}).promise;
       thumb=c.toDataURL('image/jpeg',0.6);
     }catch(e){}
 
-    const text = await pdfPageToText(page);
-    if(text && text.replace(/\s/g,'').length > 20){   // PDF con texto real
-      const parsed = parseNota(text); parsed.__raw = text;
-      return {parsed, thumb};
+    // Lee TODAS las hojas (una nota larga puede venir en 2 páginas: productos en la 1,
+    // totales/anticipo/restante/depósito en la 2). Cada hoja usa su capa de texto si la
+    // tiene, y si no (hoja escaneada) cae a OCR solo para esa hoja.
+    const pageTexts = [];
+    for(let i=1;i<=numPages;i++){
+      const base = 0.3 + (i-1)/numPages*0.5;
+      setProg(base, numPages>1 ? `Leyendo hoja ${i} de ${numPages}` : 'Leyendo el texto del PDF');
+      const page = (i===1) ? page1 : await pdf.getPage(i);
+      let pageText = await pdfPageToText(page);
+      if(!pageText || pageText.replace(/\s/g,'').length <= 20){
+        // hoja escaneada (sin capa de texto) -> OCR de esa hoja
+        setProg(base, numPages>1 ? `Hoja ${i} sin texto, usando OCR` : 'PDF sin texto, usando OCR');
+        const vp2=page.getViewport({scale:2});
+        const c2=document.createElement('canvas'); c2.width=vp2.width; c2.height=vp2.height;
+        await page.render({canvasContext:c2.getContext('2d'), viewport:vp2}).promise;
+        const r = await Tesseract.recognize(c2,'spa',{logger:m=>{if(m.status==='recognizing text')setProg(base + m.progress*(0.5/numPages),'Reconociendo el texto');}});
+        pageText = r.data.text || '';
+      }
+      pageTexts.push(pageText);
     }
-    // PDF escaneado (sin capa de texto) -> OCR de la imagen
-    setProg(0.5,'PDF sin texto, usando OCR');
-    const vp2=page.getViewport({scale:2});
-    const c2=document.createElement('canvas'); c2.width=vp2.width; c2.height=vp2.height;
-    await page.render({canvasContext:c2.getContext('2d'), viewport:vp2}).promise;
-    const r = await Tesseract.recognize(c2,'spa',{logger:m=>{if(m.status==='recognizing text')setProg(0.5+m.progress*0.5,'Reconociendo el texto');}});
-    const parsed = parseNota(r.data.text||''); parsed.__raw = r.data.text||'';
+
+    setProg(0.9,'Extrayendo los datos');
+    const text = pageTexts.join('\n');
+    const parsed = parseNota(text); parsed.__raw = text;
     return {parsed, thumb};
   }
 
