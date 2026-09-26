@@ -417,8 +417,18 @@ function parseNota(text){
   const prodMult   = /^(.+?)\s+(\d+)\s*[×xX]\s*\$?\s*[\d,]+\.\d{2}\s*$/;                  // formato nuevo: nombre  CANT × $precio  (el importe va en el renglón siguiente)
   const prodInicio = /^(\d{1,3})\s*(?:pz|pzs|piezas?|x)?\s*[\-\.\)]?\s+(.{2,})/i;          // respaldo: CANT descripción
   const soloImporte = /^\$\s*[\d,]+\.\d{2}\s*$/;                                          // renglón suelto con solo el importe (formato nuevo)
+  const obsStop = /^(SUBTOTAL|TOTAL\s|ANTICIPO|RESTANTE|SALDO|DEP[OÓ]SITO|GARANT[IÍ]A|A\s*PAGAR|INCLUYE\s)/i;
+
+  // Los productos SIEMPRE van antes de "OBSERVACIONES" (o, si no hay observaciones, antes del
+  // resumen de totales). Con notas de 2+ hojas, la hoja 2 trae totales y a veces un bloque de
+  // políticas de reserva/pago -> se acota aquí dónde termina la tabla de productos para que ese
+  // texto (números de cláusula, "48 hrs", "30%", etc.) nunca se cuele como si fuera un producto.
+  const oi = lines.findIndex(l => /OBSERVACIONES/i.test(l));
+  let prodEnd = oi >= 0 ? oi : lines.findIndex(l => obsStop.test(l.trim()));
+  if(prodEnd < 0) prodEnd = lines.length;
+
   const productos = [];
-  for(const l0 of lines){
+  for(const l0 of lines.slice(0, prodEnd)){
     const l = l0.trim();
     if(soloImporte.test(l)) continue;
     let m = l.match(prodTabla);
@@ -432,9 +442,7 @@ function parseNota(text){
 
   // observaciones: bloque tras "OBSERVACIONES", quitando la columna financiera de la derecha
   const finTail = /(SUBTOTAL|ANTICIPO|RESTANTE|SALDO|DEP[OÓ]SITO|GARANT[IÍ]A|\d+\s*%|\$[\d.,]+).*/i;
-  const obsStop = /^(SUBTOTAL|TOTAL\s|ANTICIPO|RESTANTE|SALDO|DEP[OÓ]SITO|GARANT[IÍ]A|A\s*PAGAR|INCLUYE\s)/i;
   const obs = [];
-  const oi = lines.findIndex(l => /OBSERVACIONES/i.test(l));
   if(oi >= 0){
     for(let i=oi+1; i<lines.length; i++){
       if(obsStop.test(lines[i].trim())) break;         // llegamos al resumen de totales / texto legal: paramos aquí
