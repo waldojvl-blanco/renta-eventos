@@ -10,6 +10,7 @@ let EVENTS = [];
 let FILTER = 'prox';
 let QUERY = '';
 let editingId = null;
+let VIEW = localStorage.getItem('rentaVista') || '1col';
 
 /* ---------------- API ---------------- */
 async function apiGet(){ const r = await fetch('/api/eventos'); return r.ok ? r.json() : []; }
@@ -99,6 +100,20 @@ function renderBoard(){
   let nextId=null;
   for(const e of list){ const d=parseDate(e.fecha); if(d&&startOfDay(d)>=today){nextId=e.id;break;} }
   board.innerHTML = '<div class="grid">'+list.map(e=>cardHTML(e,nextId)).join('')+'</div>';
+  if(VIEW==='2col-b') compactifyProductLists();
+}
+
+function compactifyProductLists(){
+  document.querySelectorAll('#board .prod-list').forEach(list=>{
+    const items = list.querySelectorAll('.prod');
+    if(items.length>3){
+      for(let i=3;i<items.length;i++) items[i].style.display='none';
+      const extra = document.createElement('div');
+      extra.className = 'prod-extra';
+      extra.textContent = '+'+(items.length-3)+' más';
+      list.appendChild(extra);
+    }
+  });
 }
 
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -580,6 +595,21 @@ function toast(msg){
   clearTimeout(toastT); toastT = setTimeout(()=>t.classList.remove('show'), 2400);
 }
 
+/* ---------------- vista (1 col / 2 col / 2 col compacta) ---------------- */
+function applyView(){
+  document.body.classList.remove('view-2col-a','view-2col-b');
+  if(VIEW==='2col-a') document.body.classList.add('view-2col-a');
+  if(VIEW==='2col-b') document.body.classList.add('view-2col-b');
+  document.querySelectorAll('#viewSwitch button').forEach(b=>b.classList.toggle('on', b.dataset.v===VIEW));
+}
+document.getElementById('viewSwitch').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  VIEW = b.dataset.v;
+  localStorage.setItem('rentaVista', VIEW);
+  applyView();
+  renderBoard();
+});
+
 /* ---------------- filtros / búsqueda ---------------- */
 document.getElementById('filters').addEventListener('click', e=>{
   const b = e.target.closest('button'); if(!b) return;
@@ -589,4 +619,4 @@ document.getElementById('filters').addEventListener('click', e=>{
 document.getElementById('search').addEventListener('input', e=>{ QUERY = e.target.value; renderBoard(); });
 
 /* ---------------- init ---------------- */
-(async ()=>{ await loadEvents(); render(); })();
+(async ()=>{ applyView(); await loadEvents(); render(); })();

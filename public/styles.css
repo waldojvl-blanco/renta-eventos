@@ -38,6 +38,11 @@ header{display:flex;align-items:flex-start;justify-content:space-between;gap:16p
 .search input::placeholder{color:var(--muted)}
 .search svg{color:var(--muted);flex-shrink:0}
 
+.viewswitch{display:none;gap:6px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:14px;overflow-x:auto}
+.viewswitch .vs-label{color:var(--muted);font-size:11.5px;padding:0 4px 0 8px;flex-shrink:0}
+.viewswitch button{font-size:12px;color:var(--muted);padding:7px 10px;border-radius:8px;font-weight:500;flex-shrink:0;white-space:nowrap}
+.viewswitch button.on{background:var(--surface-2);color:var(--text)}
+
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;position:relative;display:flex;flex-direction:column}
 .card.next{border-color:var(--rosa);box-shadow:0 0 0 1px var(--rosa),0 18px 40px -22px var(--rosa-glow)}
@@ -145,4 +150,33 @@ header{display:flex;align-items:flex-start;justify-content:space-between;gap:16p
   .stat:last-child{grid-column:1/-1}
   .row3{grid-template-columns:1fr}
   .grid{grid-template-columns:1fr}
+  .viewswitch{display:flex}
+
+  /* Vista: 2 columnas (misma tarjeta, solo mas angosta) */
+  body.view-2col-a .grid{grid-template-columns:1fr 1fr}
+
+  /* Vista: 2 columnas compacta (tarjeta reducida para caber bien angosta) */
+  body.view-2col-b .grid{grid-template-columns:1fr 1fr;gap:10px}
+  body.view-2col-b .card-top{padding:12px 10px 6px;gap:8px}
+  body.view-2col-b .ticket{width:46px;padding:7px 2px;border-radius:9px}
+  body.view-2col-b .ticket .day{font-size:19px}
+  body.view-2col-b .ticket .mon{font-size:9px;margin-top:1px}
+  body.view-2col-b .ticket .yr{font-size:8px}
+  body.view-2col-b .who .name{font-size:13.5px;line-height:1.22;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  body.view-2col-b .who .meta{font-size:10.5px;gap:2px;margin-top:4px}
+  body.view-2col-b .who .meta span:nth-child(n+3){display:none}
+  body.view-2col-b .who .meta svg{width:11px;height:11px}
+  body.view-2col-b .countdown{font-size:9.5px;padding:2px 7px;margin-top:5px}
+  body.view-2col-b .ribbon{font-size:9px;padding:4px 8px}
+  body.view-2col-b .card.next .card-top{padding-top:28px}
+  body.view-2col-b .section{padding:0 10px 6px}
+  body.view-2col-b .section h4{font-size:9px;margin:7px 0 4px;letter-spacing:.06em}
+  body.view-2col-b .prod-list{gap:3px}
+  body.view-2col-b .prod{font-size:11px;gap:5px}
+  body.view-2col-b .prod .q{min-width:16px;font-size:10.5px}
+  body.view-2col-b .prod-extra{font-size:10.5px;color:var(--rosa-2);font-weight:600;margin-top:2px}
+  body.view-2col-b .money{padding:0 10px 6px;gap:4px}
+  body.view-2col-b .chip{font-size:9.5px;padding:3px 6px}
+  body.view-2col-b .card-actions button{padding:8px 2px;font-size:9px;gap:3px;flex-direction:column}
+  body.view-2col-b .card-actions button svg{width:14px;height:14px}
 }
