@@ -43,6 +43,7 @@ header{display:flex;align-items:flex-start;justify-content:space-between;gap:16p
 .card.next{border-color:var(--rosa);box-shadow:0 0 0 1px var(--rosa),0 18px 40px -22px var(--rosa-glow)}
 .card.done{opacity:.62}
 .ribbon{position:absolute;top:0;right:0;background:var(--rosa);color:#fff;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 12px;border-bottom-left-radius:10px}
+.card.next .card-top{padding-top:38px}
 
 .card-top{display:flex;gap:14px;padding:16px 16px 12px}
 .ticket{flex-shrink:0;width:72px;background:linear-gradient(160deg,var(--rosa),#2E7C8C);border-radius:12px;color:#fff;text-align:center;padding:10px 4px;box-shadow:0 8px 20px -10px var(--rosa-glow)}
