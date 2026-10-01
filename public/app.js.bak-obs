@@ -459,10 +459,6 @@ function parseNota(text){
   const finTail = /(SUBTOTAL|ANTICIPO|RESTANTE|SALDO|DEP[OÓ]SITO|GARANT[IÍ]A|\d+\s*%|\$[\d.,]+).*/i;
   const obs = [];
   if(oi >= 0){
-    // El primer renglón de observaciones suele ir en la MISMA línea que la etiqueta
-    // ("Observaciones: Vaso jaibolero"): se conserva lo que viene después de la etiqueta.
-    const primero = lines[oi].replace(/^.*?OBSERVACIONES\s*:?\s*/i,'').replace(finTail,'').trim();
-    if(/[a-záéíóúñ]/i.test(primero)) obs.push(primero);
     for(let i=oi+1; i<lines.length; i++){
       if(obsStop.test(lines[i].trim())) break;         // llegamos al resumen de totales / texto legal: paramos aquí
       const left = lines[i].replace(finTail,'').trim();
